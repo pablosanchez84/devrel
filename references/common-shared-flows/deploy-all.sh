@@ -19,7 +19,11 @@ set -x
 SCRIPT=$(readlink -f "$0")
 SCRIPTPATH=$(dirname "$SCRIPT")
 
-[ -n "$APIGEE_SSO_TOKEN" ] && export APIGEE_AUTH="-t $APIGEE_SSO_TOKEN" || export APIGEE_AUTH="-u $APIGEE_USER -p $APIGEE_PASS"
+if [ -n "$APIGEE_SSO_TOKEN" ]; then
+   export APIGEE_AUTH="-t $APIGEE_SSO_TOKEN"
+else
+   export APIGEE_AUTH="-u $APIGEE_USER -p $APIGEE_PASS"
+fi
 
 cd "$SCRIPTPATH" || exit
 for SF in */; do
