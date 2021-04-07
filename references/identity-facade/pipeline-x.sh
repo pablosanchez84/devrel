@@ -15,7 +15,7 @@
 
 set -e
 
-TOKEN=$(gcloud auth print-access-token)
+export TOKEN=$(gcloud auth print-access-token)
 
 #################################
 ### function: set_idp_env_var ###
@@ -43,7 +43,7 @@ set_idp_env_var() {
     TEST_IDP_ISSUER=$(printf '%s' "$issuer" | awk -F\" '{print $2}' | awk -F\" '{print $1}')
     export TEST_IDP_ISSUER
 
-    TEST_IDP_APIGEE_REDIRECT_URI="https://$APIGEE_ORG-$APIGEE_ENV.apigee.net/v1/oauth20/callback"
+    TEST_IDP_APIGEE_REDIRECT_URI="https://$APIHOSTNAME/v1/oauth20/callback"
     export TEST_IDP_APIGEE_REDIRECT_URI
 
     TEST_IDP_AZ_HOSTNAME=$(printf '%s' "$authorization_endpoint" | awk -F\"https:// '{print $2}' | awk -F\" '{print $1}' | awk -F/ '{print $1}')
