@@ -19,12 +19,12 @@ set -e
 TOKEN=$(gcloud auth print-access-token)
 
 # Deploy the proxy
-mvn install -ntp -B -Pgoogleapi -Dorg="$APIGEE_X_ORG" -Denv="$APIGEE_X_ENV" -Dapigee.config.options=update \
+mvn install -ntp -B -Pgoogleapi -Dorg="$APIGEE_ORG" -Denv="$APIGEE_ENV" -Dapigee.config.options=update \
   -Dtoken="$TOKEN"
 
 # Create the KVM
 curl -X POST \
-    "https://apigee.googleapis.com/v1/organizations/${APIGEE_X_ORG}/environments/$APIGEE_X_ENV/keyvaluemaps" \
+    "https://apigee.googleapis.com/v1/organizations/${APIGEE_ORG}/environments/$APIGEE_ENV/keyvaluemaps" \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     --data '{"name": "${KVM_NAME}", "encrypted": true}'
@@ -32,5 +32,5 @@ curl -X POST \
 #APIGEE_TOKEN=$TOKEN npm run test
 
 #curl -X DELETE \
-#    "https://apigee.googleapis.com/v1/organizations/${APIGEE_X_ORG}/environments/$APIGEE_X_ENV/keyvaluemaps/kvmtestmap" \
+#    "https://apigee.googleapis.com/v1/organizations/${APIGEE_ORG}/environments/$APIGEE_ENV/keyvaluemaps/kvmtestmap" \
 #    -H "Authorization: Bearer $TOKEN"

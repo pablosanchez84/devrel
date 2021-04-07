@@ -304,7 +304,7 @@ set_devapp_credentials() {
 
     # set credentials for 'identityApp'
     response=$(curl --silent -X POST \
-    -H "Authorization: Bearer $OAUTH_TOKEN" -H "Content-Type:application/json" \
+    -H "Authorization: Bearer $TOKEN" -H "Content-Type:application/json" \
     --data "{ \"consumerKey\": \"$TEST_APP_CONSUMER_KEY\", \"consumerSecret\": \"$TEST_APP_CONSUMER_SECRET\" }" \
     https://apigee.googleapis.com/v1/organizations/"$APIGEE_ORG"/developers/janedoe@example.com/apps/identityApp/keys/create)
 
@@ -321,7 +321,7 @@ set_devapp_product() {
 
     # Set identity product for 'identityApp'
     response=$(curl --silent -X POST \
-        -H "Authorization: Bearer $OAUTH_TOKEN" -H "Content-Type:application/json" \
+        -H "Authorization: Bearer $TOKEN" -H "Content-Type:application/json" \
         --data "{ \"apiProducts\": [\"IdentityFacade\"] }" \
         https://apigee.googleapis.com/v1/organizations/"$APIGEE_ORG"/developers/janedoe@example.com/apps/identityApp/keys/"$TEST_APP_CONSUMER_KEY")
 
