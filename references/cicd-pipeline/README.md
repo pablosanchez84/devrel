@@ -10,10 +10,10 @@ The CICD pipeline consists of:
   deployment of feature branches as separate proxies in the same environment
 - Static code analysis using [eslint](https://eslint.org/)
 - Unit testing using [mocha](https://mochajs.org/)
-- Integration testing of the deployed proxy using
-  [apickli](https://github.com/apickli/apickli)
 - Packaging and deployment of the API proxy bundle using
   [Apigee Deploy Maven Plugin](https://github.com/apigee/apigee-deploy-maven-plugin)
+- Integration testing of the deployed proxy using
+  [apickli](https://github.com/apickli/apickli)
 
 ## Development
 
@@ -79,7 +79,7 @@ gcloud builds submit --config=./ci-config/cloudbuild/cloudbuild.yaml \
   --substitutions=_API_VERSION=google,_DEPLOYMENT_ORG=$PROJECT_ID,_INT_TEST_HOST=api.my-host.example.com,_INT_TEST_BASE_PATH=/airports-cicd-experiment/v1,BRANCH_NAME=experiment
 ```
 
-### Apigee SaaS
+### Apigee Edge
 
 Requires the Cloud Build API to be enabled and a Service Account with the
 following role:

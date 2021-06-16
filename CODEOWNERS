@@ -3,7 +3,9 @@
 /references/apigee-sandbox-v1         @laughingbiscuit
 /references/apimocker-hostedtargets   @laughingbiscuit
 /references/cicd-pipeline             @danistrebel
+/references/cicd-sharedflow-pipeline  @ssvaidyanathan
 /references/common-shared-flows       @laughingbiscuit
+/references/dutch-healthcare          @laughingbiscuit
 /references/gcp-sa-auth-shared-flow   @danistrebel
 /references/identity-facade           @joelgauci
 /references/java-callout              @laughingbiscuit
@@ -16,10 +18,11 @@
 /tools/organization-cleanup           @laughingbiscuit
 /tools/pipeline-runner                @laughingbiscuit @seymen @danistrebel
 /tools/pipeline-linter                @laughingbiscuit @seymen @danistrebel
-/tools/portable-proxy-deployer        @danistrebel
+/tools/apigee-sackmesser              @danistrebel
 /tools/another-apigee-client          @laughingbiscuit
 /tools/hybrid-quickstart              @danistrebel
 /tools/decrypt-hybrid-assets          @yuriylesyuk
 /tools/oas-to-am                      @laughingbiscuit
-/tools/apigee-openlegacy              @laughingbiscuit @tomfi
 /tools/apigee-x-trial-provision       @yuriylesyuk @danistrebel
+/tools/oas-apigee-mock                @markjkelly
+/tools/apigee-openlegacy              @laughingbiscuit @tomfi
