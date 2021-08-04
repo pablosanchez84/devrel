@@ -36,9 +36,9 @@ set_config_params() {
     export GKE_CLUSTER_NAME=${GKE_CLUSTER_NAME:-apigee-hybrid}
     export GKE_CLUSTER_MACHINE_TYPE=${GKE_CLUSTER_MACHINE_TYPE:-e2-standard-4}
 
-    export APIGEE_CTL_VERSION='1.4.4'
+    export APIGEE_CTL_VERSION='1.5.2'
     export KPT_VERSION='v0.34.0'
-    export CERT_MANAGER_VERSION='v1.1.0'
+    export CERT_MANAGER_VERSION='v1.2.0'
     export ASM_VERSION='1.8'
 
     OS_NAME=$(uname -s)
@@ -173,7 +173,7 @@ create_apigee_org() {
     -d "{
         \"name\":\"$PROJECT_ID\",
         \"displayName\":\"$PROJECT_ID\",
-        \"description\":\"Apigee Hybrid Org\",
+        \"description\":\"Apigee hybrid Org\",
         \"analyticsRegion\":\"$AX_REGION\",
         \"runtimeType\":\"HYBRID\",
         \"properties\" : {
@@ -333,11 +333,12 @@ create_gke_cluster() {
 }
 
 
-install_asm_and_certmanager() {
-
+install_certmanager() {
   echo "👩🏽‍💼 Creating Cert Manager"
   kubectl apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/$CERT_MANAGER_VERSION/cert-manager.yaml
+}
 
+install_asm() {
   echo "🏗️ Preparing ASM install requirements"
   mkdir -p "$QUICKSTART_TOOLS"/kpt
   curl --fail -L -o "$QUICKSTART_TOOLS/kpt/kpt.tar.gz" "https://github.com/GoogleContainerTools/kpt/releases/download/${KPT_VERSION}/${KPT_BINARY}"
@@ -388,11 +389,15 @@ spec:
             targetPort: 8443
 EOF
 
+  rm -rf "$QUICKSTART_TOOLS"/istio-asm/install-out
+  mkdir -p "$QUICKSTART_TOOLS"/istio-asm/install-out
+  ln -s "$QUICKSTART_TOOLS/kpt/kpt"  "$QUICKSTART_TOOLS"/istio-asm/install-out/kpt
+
   "$QUICKSTART_TOOLS"/istio-asm/install_asm \
     --project_id "$PROJECT_ID" \
     --cluster_name "$GKE_CLUSTER_NAME" \
     --cluster_location "$ZONE" \
-    --output_dir "$QUICKSTART_TOOLS"/istio-asm \
+    --output_dir "$QUICKSTART_TOOLS"/istio-asm/install-out \
     --custom_overlay "$QUICKSTART_TOOLS"/istio-asm/istio-operator-patch.yaml \
     --enable_all \
     --mode install
@@ -457,16 +462,24 @@ create_self_signed_cert() {
   openssl x509 -req -days 365 -CA "$HYBRID_HOME/certs/$CA_CERT_NAME.crt" -CAkey "$HYBRID_HOME/certs/$CA_CERT_NAME.key" -set_serial 0 -in "$HYBRID_HOME/certs/$ENV_GROUP_NAME.csr" -out "$HYBRID_HOME/certs/$ENV_GROUP_NAME.crt"
 
   cat "$HYBRID_HOME/certs/$ENV_GROUP_NAME.crt" "$HYBRID_HOME/certs/$CA_CERT_NAME.crt" > "$HYBRID_HOME/certs/$ENV_GROUP_NAME.fullchain.crt"
+
+  kubectl create secret tls tls-hybrid-ingress \
+    --cert="$HYBRID_HOME/certs/$ENV_GROUP_NAME.fullchain.crt" \
+    --key="$HYBRID_HOME/certs/$ENV_GROUP_NAME.key" \
+    -n istio-system --dry-run -o yaml | kubectl apply -f -
 }
 
 create_sa() {
-    for SA in mart cassandra udca metrics synchronizer logger watcher distributed-trace
-    do
-      yes | "$APIGEECTL_HOME"/tools/create-service-account "apigee-$SA" "$HYBRID_HOME/service-accounts"
-    done
+  yes | "$APIGEECTL_HOME"/tools/create-service-account -e prod -d "$HYBRID_HOME/service-accounts"
+
+  echo -n "🔛 Enabling runtime synchronizer"
+    curl --fail -X POST -H "Authorization: Bearer $(token)" \
+    -H "Content-Type:application/json" \
+    "https://apigee.googleapis.com/v1/organizations/${PROJECT_ID}:setSyncAuthorization" \
+    -d "{\"identities\":[\"serviceAccount:apigee-synchronizer@${PROJECT_ID}.iam.gserviceaccount.com\"]}"
 }
 
-install_runtime() {
+configure_runtime() {
   ENV_NAME=$1
   ENV_GROUP_NAME=$2
   echo "Configure Overrides"
@@ -484,8 +497,7 @@ k8sCluster:
 
 virtualhosts:
   - name: $ENV_GROUP_NAME
-    sslCertPath: $HYBRID_HOME/certs/$ENV_GROUP_NAME.fullchain.crt
-    sslKeyPath: $HYBRID_HOME/certs/$ENV_GROUP_NAME.key
+    sslSecret: tls-hybrid-ingress
 
 instanceID: "$PROJECT_ID-$(date +%s)"
 
@@ -513,32 +525,32 @@ logger:
   serviceAccountPath: "$HYBRID_HOME/service-accounts/$PROJECT_ID-apigee-logger.json"
 
 EOF
+}
+
+install_runtime() {
     pushd "$HYBRID_HOME" || return # because apigeectl uses pwd-relative paths
     mkdir -p "$HYBRID_HOME"/generated
     "$APIGEECTL_HOME"/apigeectl init -f "$HYBRID_HOME"/overrides/overrides.yaml --print-yaml > "$HYBRID_HOME"/generated/apigee-init.yaml
-    echo -n "⏳ Waiting for Apigeectl init "
+    sleep 2 && echo -n "⏳ Waiting for Apigeectl init "
     wait_for_ready "0" "$APIGEECTL_HOME/apigeectl check-ready -f $HYBRID_HOME/overrides/overrides.yaml > /dev/null  2>&1; echo \$?" "apigeectl init: done."
 
     "$APIGEECTL_HOME"/apigeectl apply -f "$HYBRID_HOME"/overrides/overrides.yaml --print-yaml > "$HYBRID_HOME"/generated/apigee-runtime.yaml
 
-    echo -n "⏳ Waiting for Apigeectl apply "
+    sleep 2 && echo -n "⏳ Waiting for Apigeectl apply "
     wait_for_ready "0" "$APIGEECTL_HOME/apigeectl check-ready -f $HYBRID_HOME/overrides/overrides.yaml > /dev/null  2>&1; echo \$?" "apigeectl apply: done."
 
     popd || return
 
-    echo -n "🔛 Enabling runtime synchronizer"
-    curl --fail -X POST -H "Authorization: Bearer $(token)" \
-    -H "Content-Type:application/json" \
-    "https://apigee.googleapis.com/v1/organizations/${PROJECT_ID}:setSyncAuthorization" \
-    -d "{\"identities\":[\"serviceAccount:apigee-synchronizer@${PROJECT_ID}.iam.gserviceaccount.com\"]}"
+    echo "🎉🎉🎉 Hybrid installation completed!"
+}
 
-    echo -n "🕵️‍♀️ Turn on trace logs"
+enable_trace() {
+  ENV_NAME=$1
+  echo -n "🕵️‍♀️ Turn on trace logs"
     curl --fail -X PATCH -H "Authorization: Bearer $(token)" \
     -H "Content-Type:application/json" \
     "https://apigee.googleapis.com/v1/organizations/${PROJECT_ID}/environments/$ENV_NAME/traceConfig" \
     -d "{\"exporter\":\"CLOUD_TRACE\",\"endpoint\":\"${PROJECT_ID}\",\"sampling_config\":{\"sampler\":\"PROBABILITY\",\"sampling_rate\":0.5}}"
-
-    echo "🎉🎉🎉 Hybrid installation completed!"
 }
 
 deploy_example_proxy() {
@@ -575,7 +587,7 @@ deploy_example_proxy() {
 }
 
 delete_apigee_keys() {
-  for SA in mart cassandra udca metrics synchronizer logger watcher distributed-trace
+  for SA in mart cassandra udca metrics synchronizer logger watcher distributed-trace runtime
   do
     delete_sa_keys "apigee-${SA}"
   done

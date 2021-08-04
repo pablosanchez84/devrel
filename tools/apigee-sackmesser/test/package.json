@@ -1,0 +1,19 @@
+{
+    "name": "sackmesser-example",
+    "version": "1.0.0",
+    "description": "Sackmesser Example Proxy",
+    "author": "danistrebel",
+    "licenses": [
+        {
+            "type": "Apache-2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0"
+        }
+    ],
+    "scripts": {
+        "test": "cucumber-js --publish-quiet ./integration"
+    },
+    "devDependencies": {
+        "@cucumber/cucumber": "^7.3.0",
+        "apickli": "^3.0.0"
+    }
+}
