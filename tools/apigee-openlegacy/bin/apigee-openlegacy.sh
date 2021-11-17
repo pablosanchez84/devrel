@@ -31,13 +31,12 @@ if [ -z "$OPENLEGACY_APIKEY"   ] || \
    [ -z "$OPENLEGACY_HOST"     ] || \
    [ -z "$OPENLEGACY_USER"     ] || \
    [ -z "$OPENLEGACY_PASS"     ] || \
-   [ -z "$OPENLEGACY_CODEPAGE" ] || \
    [ -z "$APIGEE_USER"         ] || \
    [ -z "$APIGEE_PASS"         ] || \
    [ -z "$APIGEE_ORG"          ] || \
    [ -z "$APIGEE_ENV"          ] || \
    [ -z "$GCP_PROJECT"         ]; then
-  echo "A required variable is missing"; 
+  echo "A required variable is missing";
   exit 1
 fi
 
@@ -65,7 +64,7 @@ done
 ol login --api-key "$OPENLEGACY_APIKEY"
 ol create module --connector as400-pcml aok-module
 cp "$SCRIPTPATH"/../res/getcst.pcml aok-module/
-(cd aok-module/ && ol add --source-path getcst.pcml --host "$OPENLEGACY_HOST" --code-page "$OPENLEGACY_CODEPAGE" --user "$OPENLEGACY_USER" --password "$OPENLEGACY_PASS")
+(cd aok-module/ && ol test connection --host "$OPENLEGACY_HOST"  --user "$OPENLEGACY_USER" --password "$OPENLEGACY_PASS" && ol add --source-path getcst.pcml)
 (cd aok-module/ && ol push module)
 ol create project aok-project --modules aok-module
 
@@ -77,7 +76,7 @@ gcloud services enable containerregistry.googleapis.com run.googleapis.com
 gcloud auth configure-docker -q
 
 cat > Dockerfile <<EOF
-FROM openlegacy/as400-rpc:1.1.9
+FROM openlegacy/as400-rpc:1.1.19
 RUN mkdir -p /tmp/data
 RUN echo '{ \
   "source-provider": { \
@@ -128,7 +127,7 @@ npx apigeetool createcache -u "$APIGEE_USER" -p "$APIGEE_PASS" -o "$APIGEE_ORG" 
 ###
 
 GCP_SA_KEY=$(jq '. | tostring' < "./credentials.json")
-curl -XPOST -s -u "$APIGEE_USER:$APIGEE_PASS" "https://api.enterprise.apigee.com/v1/o/$APIGEE_ORG/e/$APIGEE_ENV/keyvaluemaps" \
+curl -X POST -s -u "$APIGEE_USER:$APIGEE_PASS" "https://api.enterprise.apigee.com/v1/o/$APIGEE_ORG/e/$APIGEE_ENV/keyvaluemaps" \
   -H 'Content-Type: application/json; charset=utf-8' \
   --data-binary @- > /dev/null << EOF
 {
@@ -177,7 +176,7 @@ echo "APIKEY is $APIKEY"
 sed -i.bak "s|@APIKEY@|$APIKEY|" ./aok-v1/test/features/step_definitions/init.js
 rm ./aok-v1/test/features/step_definitions/init.js.bak
 
-sleep 60 # service account can take up to 60 seconds to propogate
+sleep 60 # service account can take up to 60 seconds to propagate
 
 ###
 # run some smoke tests
@@ -186,4 +185,4 @@ sleep 60 # service account can take up to 60 seconds to propogate
 APIKEY=$APIKEY npm test --prefix ./aok-v1
 
 ### print result
-echo "Successfully Apigee OpenLegacy Kickstarter. API key is $APIKEY"
+echo "Successfully deployed Apigee OpenLegacy Kickstarter. API key is $APIKEY"

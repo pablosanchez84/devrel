@@ -16,9 +16,15 @@
 
 set -e
 
+ERRORS=""
+
 for TYPE in references labs tools; do
   for D in "$TYPE"/*; do
-    grep "^-" README.md | grep "$D" -q
-    grep "$D" CODEOWNERS -q
+    grep "^-" README.md | grep "$D" -q || ERRORS="$ERRORS\n[ERROR] missing root README entry for $D"
   done
 done
+
+if [ -n "$ERRORS" ]; then
+  echo "$ERRORS"
+  exit 1
+fi

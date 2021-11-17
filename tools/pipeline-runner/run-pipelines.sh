@@ -19,7 +19,6 @@ PIPELINE_REPORT=""
 DEVREL_ROOT="$PWD"
 
 PATH=$PATH:"$DEVREL_ROOT/tools/another-apigee-client"
-PATH=$PATH:"$DEVREL_ROOT/tools/organization-cleanup/organization-cleanup.sh"
 PATH=$PATH:"$DEVREL_ROOT/tools/apigee-sackmesser/bin"
 
 append_pipeline_result() {
@@ -29,7 +28,7 @@ append_pipeline_result() {
 run_single_pipeline() {
   DIR=$1
   STARTTIME=$(date +%s)
-  (cd "$DIR" && ./pipeline.sh > >(sed "s#^#$DIR: #") 2> >(sed "s#^#$DIR (err): #" >&2))
+  (cd "$DIR" && ./pipeline.sh > >(sed "s#^#$(date "+%H:%M:%S") $DIR: #") 2> >(sed "s#^#$(date "+%H:%M:%S") $DIR (err): #" >&2))
   PIPELINE_EXIT=$?
   ENDTIME=$(date +%s)
   append_pipeline_result "$DIR,$PIPELINE_EXIT,$((ENDTIME-STARTTIME))s"

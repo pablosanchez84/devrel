@@ -1,0 +1,17 @@
+{
+  "name": "@Proxy@-@Version@",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "npm i && npx cucumber-js test"
+  },
+  "dependencies": {
+    "@cucumber/cucumber": "^7.3.0",
+    "apickli": "^3.0.1",
+    "apigeetool": "^0.15.1"
+  }
+}

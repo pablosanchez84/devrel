@@ -39,6 +39,7 @@ help
 clean
 
 Options:
+Options:
 --googleapi (default), use apigee.googleapis.com (for X, hybrid)
 --apigeeapi, use api.enterprise.apigee.com (for Edge)
 -b,--base-path, overrides the default base path for the API proxy
@@ -54,8 +55,9 @@ Options:
 -t,--token, GCP token (X,hybrid only) or OAuth2 token (Edge)
 -u,--username, Apigee User Name (Edge only)
 --async, Asynchronous deployment option (X,hybrid only)
---description, Human friendly proxy or shared flow description
 --debug, show verbose debug output
+--deployment-sa, GCP Service Account to associate with the deployment (X,hybrid only)
+--description, Human friendly proxy or shared flow description
 ```
 
 ## CLI Examples
@@ -139,4 +141,4 @@ that simplifies Apigee deployments by eliminating the need for you to create and
 maintain pom files. It supports proxy deployments to Apigee Edge, hybrid and X
 products. It also provides a Docker container that removes the need for you to
 install Java and Maven and its dependencies on your build machines with m2 cache
-initialised at the time of docker build.
+initialized at the time of docker build.
