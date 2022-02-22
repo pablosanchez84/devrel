@@ -1,0 +1,17 @@
+{
+  "environment": "web",
+  "format": "html",
+  "prefix": "https://storage.googleapis.com",
+  "mainga": "UA-49880327-14",
+  "updated": "2022-02-22T19:47:59Z",
+  "id": "idp-okta-integration",
+  "duration": 0,
+  "title": "Apigee IDP integration with Okta",
+  "summary": "",
+  "source": "./README.md",
+  "theme": "",
+  "status": null,
+  "category": null,
+  "tags": [],
+  "url": "idp-okta-integration"
+}
