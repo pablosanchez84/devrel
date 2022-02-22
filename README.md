@@ -29,6 +29,8 @@ further to fit a particular use case.
   Reference implementation for using Apigee to expose a Cloud Run Service
 - [Data Converters Shared Flow](references/data-converters-shared-flow) -
   A reference shared flow for doing common response data JSON conversions
+- [Product Recommendations](references/product-recommendations) - 
+  Smart API to Predict Customer Propensity to buy using Apigee, BigQuery ML and Cloud Spanner
 - [Proxy Template](references/proxy-template) -
   An extensible templating tool to bootstrap API proxies containing Security,
   Traffic Management, Error Handling
@@ -81,6 +83,8 @@ technical or non-technical topic.
 - [BDD Proxy Development](labs/bdd-proxy-development) [(web)](https://apigee.github.io/devrel/labs/bdd-proxy-development)
   A 200 level lab demonstrating behavior-driven API development by building,
   deploying and testing a mock API, generated from an Open API Specification.
+- [Identity facade with Okta](labs/idp-okta-integration)
+  A 300 level lab that shows how to configure the Apigee Identity Facade with Okta IDP.
 
 ## Contributing
 
