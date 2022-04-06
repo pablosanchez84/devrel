@@ -27,9 +27,11 @@ further to fit a particular use case.
   Reference implementation for a shared flow to log to Google Cloud Logging
 - [Cloud Run](references/cloud-run) -
   Reference implementation for using Apigee to expose a Cloud Run Service
+- [Data API](references/data-api) - A reference implementation for using
+  Apigee to facilitate the consumption of data from a data platform.
 - [Data Converters Shared Flow](references/data-converters-shared-flow) -
   A reference shared flow for doing common response data JSON conversions
-- [Product Recommendations](references/product-recommendations) - 
+- [Product Recommendations](references/product-recommendations) -
   Smart API to Predict Customer Propensity to buy using Apigee, BigQuery ML and Cloud Spanner
 - [Proxy Template](references/proxy-template) -
   An extensible templating tool to bootstrap API proxies containing Security,
@@ -46,11 +48,18 @@ further to fit a particular use case.
   compliant identity provider
 - [KVM Admin API](references/kvm-admin-api) -
   Generic API proxy to provide Create, Read and Delete operations for KVMs
+- [OAuth Admin API](references/oauth-admin-api) -
+  API proxy to enable the revocation of Apigee-issued access tokens by
+  application or end user id.
 - [Dutch Healthcare Reference](references/dutch-healthcare) -
   An API reference to accelerate implementation of Dutch Healthcare standards.
 - [XML & JSON Threat Protection](references/threat-protect) -
   A reference for protecting API proxies against XML and JSON threats
-
+- [Auth Schemes](references/auth-schemes) - Example implementations for various
+  popular API auth schemes
+- [reCAPTCHA enterprise](references/recaptcha-enterprise) - A reference for
+  API protection against bot leveraging reCAPTCHA enterprise
+  
 ## Tools
 
 This folder contains ready-made utilities which simplify and assist the usage of

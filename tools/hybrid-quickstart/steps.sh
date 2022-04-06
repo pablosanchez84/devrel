@@ -20,15 +20,22 @@ set_config_params() {
     echo "🔧 Configuring GCP Project"
     PROJECT_ID=${PROJECT_ID:-$(gcloud config get-value "project")}
     export PROJECT_ID
+    echo "- Project ID $PROJECT_ID"
     gcloud config set project "$PROJECT_ID"
 
     export AX_REGION=${AX_REGION:-'europe-west1'}
+    echo "- Analytics Region $AX_REGION"
 
     export REGION=${REGION:-'europe-west1'}
     gcloud config set compute/region "$REGION"
 
     export ZONE=${ZONE:-'europe-west1-c'}
     gcloud config set compute/zone "$ZONE"
+    echo "- Compute Location $REGION/$ZONE"
+
+    export NETWORK=${NETWORK:-'apigee-hybrid'}
+    export SUBNET=${SUBNET:-"apigee-$REGION"}
+    echo "- Network $NETWORK/$SUBNET"
 
     printf "\n🔧 Apigee hybrid Configuration:\n"
     export INGRESS_TYPE=${INGRESS_TYPE:-'external'} # internal|external
@@ -36,16 +43,21 @@ set_config_params() {
     export CERT_TYPE=${CERT_TYPE:-google-managed}
     echo "- TLS Certificate $CERT_TYPE"
 
+    if [ "$CERT_TYPE" == "google-managed" ] && [ "$INGRESS_TYPE" != "external" ]; then
+        echo "Google Managed Certificates can only be used with an external ingress. SET CERT_TYPE to 'self-signed' (for the script to create one for you) or 'skip' if you want to provide your own as a k8s secret later."
+        exit 1
+    fi
+
     export GKE_CLUSTER_NAME=${GKE_CLUSTER_NAME:-apigee-hybrid}
     export GKE_CLUSTER_MACHINE_TYPE=${GKE_CLUSTER_MACHINE_TYPE:-e2-standard-4}
     echo "- GKE Node Type $GKE_CLUSTER_MACHINE_TYPE"
-    export APIGEE_CTL_VERSION='1.6.4'
-    echo "- Apigeectl version $APIGEE_CTL_VERSION"
+    export APIGEE_HYBRID_VERSION='1.6.6'
+    echo "- Apigee hybrid version $APIGEE_HYBRID_VERSION"
     export KPT_VERSION='v0.34.0'
     echo "- kpt version $KPT_VERSION"
-    export CERT_MANAGER_VERSION='v1.2.0'
+    export CERT_MANAGER_VERSION='v1.5.4'
     echo "- Cert Manager version $CERT_MANAGER_VERSION"
-    export ASM_VERSION='1.9'
+    export ASM_VERSION='1.10'
     echo "- ASM version $ASM_VERSION"
 
     OS_NAME=$(uname -s)
@@ -85,7 +97,7 @@ set_config_params() {
 
     export QUICKSTART_ROOT="${QUICKSTART_ROOT:-$PWD}"
     export QUICKSTART_TOOLS="$QUICKSTART_ROOT/tools"
-    export APIGEECTL_HOME=$QUICKSTART_TOOLS/apigeectl/apigeectl_$APIGEE_CTL_VERSION
+    export APIGEECTL_HOME=$QUICKSTART_TOOLS/apigeectl/apigeectl_$APIGEE_HYBRID_VERSION
     export HYBRID_HOME=$QUICKSTART_ROOT/hybrid-files
 
     echo "- Script root from: $QUICKSTART_ROOT"
@@ -101,7 +113,9 @@ function wait_for_ready(){
     local iterations=0
     local actual_out
 
-    echo -e "Waiting for $action to return output $expected_output"
+    # shellcheck disable=SC2001
+    sanitized="$(echo "$action" | sed 's/Bearer [^\"]*/TOKEN/gi')"
+    echo -e "Waiting for $sanitized to return output $expected_output"
     echo -e "Start: $(date)\n"
 
     while true; do
@@ -129,7 +143,7 @@ ask_confirm() {
     REPLY=${REPLY:-Y}
 
     if [[ "$REPLY" =~ ^[Yy]$ ]]; then
-      echo "starting provisioning"
+      echo "continuing"
     else
       exit 1
     fi
@@ -285,13 +299,33 @@ configure_network() {
 
     ENV_GROUP_NAME="$1"
 
+    if [ -z "$(gcloud compute networks list --format json --filter "name=$NETWORK" --format='get(name)')" ]; then
+      gcloud compute networks create "$NETWORK" --subnet-mode=custom
+    fi
+
+    if [ -z "$(gcloud compute networks subnets list --network "$NETWORK" --format json --filter "name=$SUBNET" --format='get(name)')" ]; then
+      gcloud compute networks subnets create "$SUBNET" --network "$NETWORK" --range "10.200.0.0/20" --region "$REGION"
+    fi
+
+    if [ -z "$(gcloud compute routers list --format json --filter "name=apigee-router" --format='get(name)')" ]; then
+      gcloud compute routers create apigee-router --network "$NETWORK"
+    fi
+
+    if [ -z "$(gcloud compute routers nats list --router apigee-router --format json --format='get(name)')" ]; then
+      gcloud compute routers nats create apigee-nat --router apigee-router --auto-allocate-nat-external-ips --nat-all-subnet-ip-ranges
+    fi
+
+    if [ -z "$(gcloud compute firewall-rules list --format json --filter "name=allow-master-webhook" --format='get(name)')" ]; then
+      gcloud compute firewall-rules create allow-master-webhook --allow tcp:9443 --target-tags hybrid-quickstart --network "$NETWORK"
+    fi
+
     if [ -z "$(gcloud compute addresses list --format json --filter 'name=apigee-ingress-ip' --format='get(address)')" ]; then
       if [[ "$INGRESS_TYPE" == "external" && "$CERT_TYPE" == "google-managed" ]]; then
         gcloud compute addresses create apigee-ingress-ip --global
       elif [[ "$INGRESS_TYPE" == "external" && "$CERT_TYPE" == "self-signed" ]]; then
         gcloud compute addresses create apigee-ingress-ip --region "$REGION"
       else
-        gcloud compute addresses create apigee-ingress-ip --region "$REGION" --subnet default --purpose SHARED_LOADBALANCER_VIP
+        gcloud compute addresses create apigee-ingress-ip --region "$REGION" --subnet "$SUBNET" --purpose SHARED_LOADBALANCER_VIP
       fi
     fi
     INGRESS_IP=$(gcloud compute addresses list --format json --filter "name=apigee-ingress-ip" --format="get(address)")
@@ -308,7 +342,7 @@ configure_network() {
       if [[ "$INGRESS_TYPE" == "external" ]]; then
         gcloud dns managed-zones create apigee-dns-zone --dns-name="$DNS_NAME" --description=apigee-dns-zone
       else
-        gcloud dns managed-zones create apigee-dns-zone --dns-name="$DNS_NAME" --description=apigee-dns-zone --visibility="private" --networks="default"
+        gcloud dns managed-zones create apigee-dns-zone --dns-name="$DNS_NAME" --description=apigee-dns-zone --visibility="private" --networks="$NETWORK"
       fi
 
       rm -f transaction.yaml
@@ -337,8 +371,14 @@ create_gke_cluster() {
         --region "$REGION" \
         --node-locations "$ZONE" \
         --release-channel stable \
-        --network default \
-        --subnetwork default \
+        --no-enable-master-authorized-networks \
+        --enable-ip-alias \
+        --enable-private-nodes \
+        --master-ipv4-cidr 172.16.0.16/28 \
+        --enable-shielded-nodes \
+        --shielded-secure-boot \
+        --network "$NETWORK" \
+        --subnetwork "$SUBNET" \
         --default-max-pods-per-node "110" \
         --enable-ip-alias \
         --machine-type "$GKE_CLUSTER_MACHINE_TYPE" \
@@ -346,6 +386,7 @@ create_gke_cluster() {
         --enable-autoscaling \
         --min-nodes "3" \
         --max-nodes "6" \
+        --tags=hybrid-quickstart \
         --labels mesh_id="$MESH_ID" \
         --workload-pool "$WORKLOAD_POOL" \
         --logging SYSTEM,WORKLOAD \
@@ -383,12 +424,6 @@ install_asm() {
   curl --fail https://storage.googleapis.com/csm-artifacts/asm/install_asm_$ASM_VERSION > "$QUICKSTART_TOOLS"/istio-asm/install_asm
   chmod +x "$QUICKSTART_TOOLS"/istio-asm/install_asm
 
-  # patch ASM installer to allow for cloud build SA
-  sed -i -e 's/iam.gserviceaccount.com/gserviceaccount.com/g' "$QUICKSTART_TOOLS"/istio-asm/install_asm
-
-  # patch ASM installer to use the new kubectl --dry-run syntax
-  sed -i -e 's/--dry-run/--dry-run=client/g' "$QUICKSTART_TOOLS"/istio-asm/install_asm
-
   if [ "$CERT_TYPE" = "google-managed" ];then
     cat << EOF > "$QUICKSTART_TOOLS"/istio-asm/istio-operator-patch.yaml
 apiVersion: install.istio.io/v1alpha1
@@ -399,6 +434,12 @@ spec:
     - name: istio-ingressgateway
       enabled: true
       k8s:
+        resources:
+          requests:
+            cpu: 1000m
+        readinessProbe:
+          initialDelaySeconds: 45
+          periodSeconds: 60
         serviceAnnotations:
           cloud.google.com/neg: '{"ingress": true}'
           cloud.google.com/backend-config: '{"default": "ingress-backendconfig"}'
@@ -407,8 +448,8 @@ spec:
           type: ClusterIP
           ports:
           - name: status-port
-            port: 15021 # for ASM 1.7.x and above, else 15020
-            targetPort: 15021 # for ASM 1.7.x and above, else 15020
+            port: 15021
+            targetPort: 15021
           - name: https
             port: 443
             targetPort: 8443
@@ -423,6 +464,12 @@ spec:
     - name: istio-ingressgateway
       enabled: true
       k8s:
+        resources:
+          requests:
+            cpu: 1000m
+        readinessProbe:
+          initialDelaySeconds: 45
+          periodSeconds: 60
         serviceAnnotations:
           networking.gke.io/load-balancer-type: $INGRESS_TYPE
         service:
@@ -430,8 +477,8 @@ spec:
           loadBalancerIP: $INGRESS_IP
           ports:
           - name: status-port
-            port: 15021 # for ASM 1.7.x and above, else 15020
-            targetPort: 15021 # for ASM 1.7.x and above, else 15020
+            port: 15021
+            targetPort: 15021
           - name: https
             port: 443
             targetPort: 8443
@@ -465,7 +512,7 @@ download_apigee_ctl() {
 
     curl --fail -L \
       -o "$APIGEECTL_ROOT/apigeectl.tar.gz" \
-      "https://storage.googleapis.com/apigee-release/hybrid/apigee-hybrid-setup/$APIGEE_CTL_VERSION/$APIGEE_CTL"
+      "https://storage.googleapis.com/apigee-release/hybrid/apigee-hybrid-setup/$APIGEE_HYBRID_VERSION/$APIGEE_CTL"
 
     tar xvzf "$APIGEECTL_ROOT/apigeectl.tar.gz" -C "$APIGEECTL_ROOT"
     rm "$APIGEECTL_ROOT/apigeectl.tar.gz"
@@ -613,14 +660,43 @@ spec:
     - destination:
         host: istio-ingressgateway.istio-system.svc.cluster.local
         port:
-          number: 15021 # for ASM 1.7.x and above, else 15020
+          number: 15021
 EOF
-
+  else
+    kubectl create ns apigee
   fi
 }
 
+create_k8s_sa_workload() {
+  K8S_SA=$1
+  GCP_SA=$2
+  kubectl create sa -n apigee "$K8S_SA" || echo "$K8S_SA exists"
+  kubectl annotate sa --overwrite -n apigee "$K8S_SA" "iam.gke.io/gcp-service-account=$GCP_SA"
+
+  gcloud iam service-accounts add-iam-policy-binding "$GCP_SA" \
+    --role roles/iam.workloadIdentityUser \
+    --member "serviceAccount:$PROJECT_ID.svc.id.goog[apigee/$K8S_SA]" --project "$PROJECT_ID"
+}
+
 create_sa() {
+
+  # make sure we don't download the service account keys
+  sed -i -e 's/download_key_file="y"/download_key_file="n"/g' "$APIGEECTL_HOME/tools/create-service-account"
+  sed -i -e 's/read -r download_key_file/# key download is not necessary for workload ID/g' "$APIGEECTL_HOME/tools/create-service-account"
+
   yes | "$APIGEECTL_HOME"/tools/create-service-account -e prod -d "$HYBRID_HOME/service-accounts"
+
+  APIGEE_ORG_HASH="$("$APIGEECTL_HOME"/apigeectl encode --org "$PROJECT_ID" 2>&1 | tail -1 | xargs | sed -e "s/^apigee-udca-//")"
+  APIGEE_ORG_ENV_HASH="$("$APIGEECTL_HOME"/apigeectl encode --org "$PROJECT_ID" --env "$ENV_NAME" 2>&1 | tail -1 | xargs | sed -e "s/^apigee-udca-//")"
+
+  create_k8s_sa_workload "apigee-cassandra-schema-setup-$APIGEE_ORG_HASH-sa" "apigee-cassandra@$PROJECT_ID.iam.gserviceaccount.com"
+  create_k8s_sa_workload "apigee-cassandra-user-setup-$APIGEE_ORG_HASH-sa" "apigee-cassandra@$PROJECT_ID.iam.gserviceaccount.com"
+  create_k8s_sa_workload "apigee-mart-$APIGEE_ORG_HASH-sa" "apigee-mart@$PROJECT_ID.iam.gserviceaccount.com"
+  create_k8s_sa_workload "apigee-connect-agent-$APIGEE_ORG_HASH-sa" "apigee-mart@$PROJECT_ID.iam.gserviceaccount.com"
+  create_k8s_sa_workload "apigee-watcher-$APIGEE_ORG_HASH-sa" "apigee-watcher@$PROJECT_ID.iam.gserviceaccount.com"
+  create_k8s_sa_workload "apigee-runtime-$APIGEE_ORG_ENV_HASH-sa" "apigee-runtime@$PROJECT_ID.iam.gserviceaccount.com"
+  create_k8s_sa_workload "apigee-udca-$APIGEE_ORG_ENV_HASH-sa" "apigee-udca@$PROJECT_ID.iam.gserviceaccount.com"
+  create_k8s_sa_workload "apigee-synchronizer-$APIGEE_ORG_ENV_HASH-sa" "apigee-synchronizer@$PROJECT_ID.iam.gserviceaccount.com"
 
   echo -n "🔛 Enabling runtime synchronizer"
     curl --fail -X POST -H "Authorization: Bearer $(token)" \
@@ -638,6 +714,7 @@ configure_runtime() {
 gcp:
   projectID: $PROJECT_ID
   region: "$REGION" # Analytics Region
+  workloadIdentityEnabled: true
 # Apigee org name.
 org: $PROJECT_ID
 # Kubernetes cluster name details
@@ -654,29 +731,9 @@ instanceID: "$PROJECT_ID-$(date +%s)"
 
 envs:
   - name: $ENV_NAME
-    serviceAccountPaths:
-      synchronizer: "$HYBRID_HOME/service-accounts/$PROJECT_ID-apigee-synchronizer.json"
-      udca: "$HYBRID_HOME/service-accounts/$PROJECT_ID-apigee-udca.json"
-      runtime: "$HYBRID_HOME/service-accounts/$PROJECT_ID-apigee-runtime.json"
-mart:
-  serviceAccountPath: "$HYBRID_HOME/service-accounts/$PROJECT_ID-apigee-mart.json"
-
-connectAgent:
-  serviceAccountPath: "$HYBRID_HOME/service-accounts/$PROJECT_ID-apigee-mart.json"
-
-udca:
-  serviceAccountPath: "$HYBRID_HOME/service-accounts/$PROJECT_ID-apigee-udca.json"
-
-metrics:
-  enabled: true
-  serviceAccountPath: "$HYBRID_HOME/service-accounts/$PROJECT_ID-apigee-metrics.json"
-
-watcher:
-  serviceAccountPath: "$HYBRID_HOME/service-accounts/$PROJECT_ID-apigee-watcher.json"
 
 logger:
   enabled: false
-  serviceAccountPath: "$HYBRID_HOME/service-accounts/$PROJECT_ID-apigee-logger.json"
 EOF
 }
 
